@@ -1,0 +1,25 @@
+pipeline{
+    agent any
+    stages{
+        stage('Hello'){
+            steps{
+                echo 'Hello World'
+            }
+        }
+        stage('2'){
+            steps{
+                echo '2'
+            }
+        }
+        stage('Build docker'){
+            steps{
+                sh 'docker build -t my-app .'
+            }
+        }
+        stage('Docker run'){
+            steps{
+                sh 'docker run -p 8080:8080 my-app'
+            }
+        }
+    }
+}
