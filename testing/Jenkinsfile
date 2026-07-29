@@ -3,6 +3,17 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "maven-app:${BRANCH_NAME}-${BUILD_NUMBER}"
+        REPORTS_DIR = "reports/${BRANCH_NAME}"
+    }
+
+    triggers {
+        githubPush()  
+        pollSCM('H/15 * * * *')
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
+        timestamps()
     }
 
     stages {
@@ -25,12 +36,18 @@ pipeline {
         stage('Extract Test Reports & Artifacts') {
             steps {
                 script {
-                    echo 'Extracting test reports and JAR artifacts from Docker image...'
+                    echo 'Extracting test reports and JAR artifacts from Docker image for branch: ${BRANCH_NAME}...'
                     
                     sh """
+                        mkdir -p ${REPORTS_DIR}
                         docker create --name temp-java-app ${DOCKER_IMAGE}
                         docker cp temp-java-app:/app/target ./target_extracted
                         docker rm temp-java-app
+                        
+                        # Copy test reports to branch-specific directory
+                        if [ -d target_extracted/surefire-reports ]; then
+                            cp -r target_extracted/surefire-reports ${REPORTS_DIR}/
+                        fi
                     """
                 }
             }
@@ -39,17 +56,36 @@ pipeline {
 
     post {
         always {
-            
+            // Parse and publish test reports for this branch
             junit allowEmptyResults: true, testResults: 'target_extracted/surefire-reports/*.xml'
+            
+            // Archive reports by branch
+            archiveArtifacts artifacts: "reports/${BRANCH_NAME}/**", allowEmptyArchive: true
+            
+            // Generate HTML report summary
+            script {
+                sh """
+                    mkdir -p ${REPORTS_DIR}
+                    echo "<h2>Build Report for Branch: ${BRANCH_NAME}</h2>" > ${REPORTS_DIR}/summary.html
+                    echo "<p>Build Number: ${BUILD_NUMBER}</p>" >> ${REPORTS_DIR}/summary.html
+                    echo "<p>Build Time: \$(date)</p>" >> ${REPORTS_DIR}/summary.html
+                """
+            }
 
             sh "docker rmi ${DOCKER_IMAGE} || true"
             sh "rm -rf target_extracted || true"
         }
         success {
+            // Archive JAR/WAR artifacts
             archiveArtifacts artifacts: 'target/**/*.jar, target/**/*.war', allowEmptyArchive: true
+            
+            echo "✓ Build successful for branch ${BRANCH_NAME}"
         }
         failure {
-            echo "Build or tests failed on branch ${BRANCH_NAME}."
+            echo "✗ Build or tests failed on branch ${BRANCH_NAME}."
+            
+            // Archive test reports even on failure
+            archiveArtifacts artifacts: "reports/${BRANCH_NAME}/**", allowEmptyArchive: true
         }
     }
 }
