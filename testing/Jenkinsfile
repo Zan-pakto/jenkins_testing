@@ -56,13 +56,10 @@ pipeline {
 
     post {
         always {
-            // Parse and publish test reports for this branch
             junit allowEmptyResults: true, testResults: 'target_extracted/surefire-reports/*.xml'
             
-            // Archive reports by branch
             archiveArtifacts artifacts: "reports/${BRANCH_NAME}/**", allowEmptyArchive: true
             
-            // Generate HTML report summary
             script {
                 sh """
                     mkdir -p ${REPORTS_DIR}
@@ -76,7 +73,6 @@ pipeline {
             sh "rm -rf target_extracted || true"
         }
         success {
-            // Archive JAR/WAR artifacts
             archiveArtifacts artifacts: 'target/**/*.jar, target/**/*.war', allowEmptyArchive: true
             
             echo "✓ Build successful for branch ${BRANCH_NAME}"
@@ -84,7 +80,6 @@ pipeline {
         failure {
             echo "✗ Build or tests failed on branch ${BRANCH_NAME}."
             
-            // Archive test reports even on failure
             archiveArtifacts artifacts: "reports/${BRANCH_NAME}/**", allowEmptyArchive: true
         }
     }
