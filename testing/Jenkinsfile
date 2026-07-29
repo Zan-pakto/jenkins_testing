@@ -23,7 +23,7 @@ pipeline {
             }
         }
 
-        stage('Build & Test in Docker') {
+        stage('Build & Test  in Docker') {
             steps {
                 script {
                     echo "Building Maven project inside Docker for branch: ${BRANCH_NAME}..." 
@@ -36,8 +36,6 @@ pipeline {
         stage('Extract Test Reports & Artifacts') {
             steps {
                 script {
-                    echo 'Extracting test reports and JAR artifacts from Docker image for branch: ${BRANCH_NAME}...'
-                    
                     sh """
                         mkdir -p ${REPORTS_DIR}
                         docker create --name temp-java-app ${DOCKER_IMAGE}
