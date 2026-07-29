@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = "maven-app:${BRANCH_NAME}-${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build & Test in Docker') {
+            steps {
+                script {
+                    echo "Building Maven project inside Docker for branch: ${BRANCH_NAME}..." 
+                    sh 'mkdir -p .m2-cache target/surefire-reports'
+                    sh "docker build -t ${DOCKER_IMAGE} ."
+                }
+            }
+        }
+
+        stage('Extract Test Reports & Artifacts') {
+            steps {
+                script {
+                    echo 'Extracting test reports and JAR artifacts from Docker image...'
+                    
+                    sh """
+                        docker create --name temp-java-app ${DOCKER_IMAGE}
+                        docker cp temp-java-app:/app/target ./target_extracted
+                        docker rm temp-java-app
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            
+            junit allowEmptyResults: true, testResults: 'target_extracted/surefire-reports/*.xml'
+
+            sh "docker rmi ${DOCKER_IMAGE} || true"
+            sh "rm -rf target_extracted || true"
+        }
+        success {
+            archiveArtifacts artifacts: 'target/**/*.jar, target/**/*.war', allowEmptyArchive: true
+        }
+        failure {
+            echo "Build or tests failed on branch ${BRANCH_NAME}."
+        }
+    }
+}
